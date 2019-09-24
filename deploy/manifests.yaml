@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tls-host-controller
+  namespace: ${component.tls-host-controller.namespace}
+  labels:
+    app: tls-host-controller
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: tls-host-controller
+    spec:
+      containers:
+			- name: tls-host-controller
+				image: agilestacks/tls-host-controller
+				imagePullPolicy: Always
+				ports:
+				- containerPort: 4443
+				volumeMounts:
+				- name: tls-host-controller-certs
+					mountPath: /data/
+					readOnly: true
+      volumes:
+			- name: tls-host-controller-certs
+				secret:
+					secretName: tls-host-controller-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tls-host-controller
+  namespace: ${component.tls-host-controller.namespace}
+  labels:
+    app: tls-host-controller
+spec:
+  ports:
+  - port: 443
+    targetPort: 4443
+  selector:
+    app: tls-host-controller
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: tls-host-controller
+  labels:
+    app: tls-host-controller
+webhooks:
+- name: tls-host-controller
+  clientConfig:
+    service:
+      name: tls-host-injector
+      namespace: ${component.tls-host-controller.namespace}
+      path: "/mutate"
+    caBundle: ""
+  rules:
+  - operations: [ "CREATE", "UPDATE" ]
+    apiGroups: ["networking.k8s.io", "extensions"]
+    apiVersions: ["v1beta1"]
+    resources: ["Ingress"]

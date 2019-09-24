@@ -91,8 +91,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	logger.Infof("Listening on :8080")
-	err = http.ListenAndServeTLS(":8080", "/data/cert.pem", "/data/cert.key", whHandler)
+	logger.Infof("Listening on :443")
+	err = http.ListenAndServeTLS(":443", "/data/cert.pem", "/data/cert.key", whHandler)
 	if err != nil {
 		panic(err)
 	}

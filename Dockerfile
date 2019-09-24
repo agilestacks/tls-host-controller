@@ -22,6 +22,6 @@ WORKDIR /root/
 # Copy the pre-built binary file from the previous stage
 COPY --from=builder /app/main .
 
-EXPOSE 8080
+EXPOSE 4443
 
 CMD [ "./main" ]
