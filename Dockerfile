@@ -1,18 +1,27 @@
-FROM golang:1.12-alpine AS build-stage
+FROM golang:1.12 as builder
+
+# Set Environment Variables
+ENV HOME /app
+ENV CGO_ENABLED 0
+ENV GOOS linux
 
 WORKDIR /app
-
 COPY go.mod go.sum ./
-
 RUN go mod download
+COPY . .
 
-RUN CGO_ENABLED=0 go build -o ./tls-host-controller --ldflags "-w -extldflags '-static'" mutator.go
+# Build app
+RUN go build -a -installsuffix cgo -o main .
 
-COPY mutator.go ./
-
-# Final image.
 FROM alpine:latest
-RUN apk --no-cache add \
-  ca-certificates
-COPY --from=build-stage /app/main /usr/local/bin/tls-host-controller
-ENTRYPOINT ["/usr/local/bin/tls-host-controller"]
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy the pre-built binary file from the previous stage
+COPY --from=builder /app/main .
+
+EXPOSE 8080
+
+CMD [ "./main" ]
