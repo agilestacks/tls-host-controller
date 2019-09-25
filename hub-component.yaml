@@ -25,19 +25,6 @@ parameters:
     - name: namespace
       value: kube-system
       env: NAMESPACE
-    - name: caIssuer
-      empty: allow
-      parameters:
-      - name: name
-        value: ca-issuer
-      - name: key
-      - name: cert
-  # alias for CEL expression
-  - name: tlshostcontroller.caIssuer.key
-    value: ${component.tls-host-controller.caIssuer.key}
-  - name: component.tls-host-controler.caIssuer.enabled
-    value: '#{size(tlshostcontroller.caIssuer.key) > 1}'
-    env: CA_ISSUER_ENABLED
 
 templates:
   extra:
