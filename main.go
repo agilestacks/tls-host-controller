@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"github.com/cloudflare/certinel"
+	"github.com/cloudflare/certinel/fswatcher"
 	whhttp "github.com/slok/kubewebhook/pkg/http"
 	"github.com/slok/kubewebhook/pkg/log"
 	"github.com/slok/kubewebhook/pkg/webhook/mutating"
@@ -128,8 +131,28 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	watcher, err := fswatcher.New("/data/tls.crt", "/data/tls.key")
+	if err != nil {
+		logger.Errorf("fatal: unable to read server certificate. err='%s'", err)
+	}
+	sentinel := certinel.New(watcher, func(err error) {
+		logger.Infof("error: certinel was unable to reload the certificate. err='%s'", err)
+	})
+
+	sentinel.Watch()
+
+	server := http.Server{
+		Addr:    ":4443",
+		Handler: whHandler,
+		TLSConfig: &tls.Config{
+			GetCertificate: sentinel.GetCertificate,
+		},
+	}
+
 	logger.Infof("Listening on :4443")
-	err = http.ListenAndServeTLS(":4443", "/data/tls.crt", "/data/tls.key", whHandler)
+	err = server.ListenAndServeTLS("", "")
+
 	if err != nil {
 		panic(err)
 	}
