@@ -41,22 +41,3 @@ spec:
   selector:
     app: tls-host-controller
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
-kind: MutatingWebhookConfiguration
-metadata:
-  name: tls-host-controller
-  labels:
-    app: tls-host-controller
-webhooks:
-- name: tls-host-controller
-  clientConfig:
-    service:
-      name: tls-host-injector
-      namespace: ${component.tls-host-controller.namespace}
-      path: "/mutate"
-    caBundle: ""
-  rules:
-  - operations: [ "CREATE", "UPDATE" ]
-    apiGroups: ["networking.k8s.io", "extensions"]
-    apiVersions: ["v1beta1"]
-    resources: ["Ingress"]

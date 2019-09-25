@@ -1,0 +1,45 @@
+---
+version: 1
+kind: component
+meta:
+  name: tls-host-controller
+  brief: A MutatingWebhook style admission controller that synchronizes spec:tls:host with spec:rules:host
+  source:
+      dir: ../../tls-host-controller
+
+requires:
+  - kubernetes
+  - cert-manager
+
+lifecycle:
+  verbs:
+  - deploy
+  - undeploy
+  - kubernetes
+
+parameters:
+  - name: component.tls-host-controller
+    parameters:
+    - name: namespace
+      value: kube-system
+      env: NAMESPACE
+    - name: caIssuer
+      empty: allow
+      parameters:
+      - name: name
+        value: ca-issuer
+      - name: key
+      - name: cert
+# alias for CEL expression
+- name: tlshostcontroller.caIssuer.key
+  value: ${component.tls-host-controller.caIssuer.key}
+- name: component.tls-host-controler.caIssuer.enabled
+  value: '#{size(tlshostcontroller.caIssuer.key) > 1}'
+  env: CA_ISSUER_ENABLED
+
+templates:
+  extra:
+  - kind: mustache
+    files:
+    - 'deploy/*.template'
+

@@ -1,3 +1,5 @@
 .*.sw*
 tls-host-controller
 main
+deploy/ca.crt
+deploy/ca.private.key
