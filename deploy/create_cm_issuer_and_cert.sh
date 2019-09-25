@@ -45,10 +45,10 @@ spec:
   organization:
   - AgileStacks
   dnsNames:
-  - tls-host-controler.kube-system.svc.cluster.local
-  - tls-host-controler.kube-system.svc.cluster
-  - tls-host-controler.kube-system.svc
-  - tls-host-controler.kube-system
+  - tls-host-controller.kube-system.svc.cluster.local
+  - tls-host-controller.kube-system.svc.cluster
+  - tls-host-controller.kube-system.svc
+  - tls-host-controller.kube-system
   - tls-host-controller
 EOF
 
@@ -71,6 +71,5 @@ webhooks:
   - operations: [ "CREATE", "UPDATE" ]
     apiGroups: ["networking.k8s.io", "extensions"]
     apiVersions: ["v1beta1"]
-    resources: ["Ingress"]
+    resources: ["ingresses"]
 EOF
-

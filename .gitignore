@@ -3,3 +3,6 @@ tls-host-controller
 main
 deploy/ca.crt
 deploy/ca.private.key
+deploy/manifests.yaml
+ca.crt
+ca.private.key

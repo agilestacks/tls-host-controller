@@ -15,11 +15,12 @@ import (
 type nothing struct{}
 
 func main() {
+	logger := &log.Std{Debug: true}
 
 	mt := mutating.MutatorFunc(func(_ context.Context, obj metav1.Object) (bool, error) {
 		ingress := obj.(*v1beta1.Ingress)
 
-		spec := ingress.Spec
+		spec := &ingress.Spec
 		rulesHosts := make(map[string]nothing)
 		tlsHosts := make(map[string]nothing)
 
@@ -48,6 +49,7 @@ func main() {
 			diff := make([]string, 0)
 			for k, _ := range rulesHosts {
 				if _, exists := tlsHosts[k]; !exists {
+					logger.Debugf("found unmatched host: %s", k)
 					diff = append(diff, k)
 				}
 			}
@@ -69,13 +71,16 @@ func main() {
 					SecretName: sekret.String(),
 				}
 				spec.TLS = append(spec.TLS, newtls)
+				logger.Debugf("appending tls block: %v", newtls)
+			} else {
+				logger.Debugf("no diffs found. No changes needed.")
+
 			}
 		}
 
 		return false, nil
 	})
 
-	logger := &log.Std{Debug: true}
 	cfg := mutating.WebhookConfig{
 		Name: "tls-host-controller",
 		Obj:  &v1beta1.Ingress{},
@@ -91,8 +96,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	logger.Infof("Listening on :443")
-	err = http.ListenAndServeTLS(":443", "/data/cert.pem", "/data/cert.key", whHandler)
+	logger.Infof("Listening on :4443")
+	err = http.ListenAndServeTLS(":4443", "/data/tls.crt", "/data/tls.key", whHandler)
 	if err != nil {
 		panic(err)
 	}
