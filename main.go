@@ -1,21 +1,52 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	whhttp "github.com/slok/kubewebhook/pkg/http"
 	"github.com/slok/kubewebhook/pkg/log"
 	"github.com/slok/kubewebhook/pkg/webhook/mutating"
 	v1beta1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"math/rand"
 	"net/http"
-	"text/template"
+	"regexp"
+	"sort"
 )
+
+const defaultDomain = "superhub.io"
+
+// sorted string slice impl
+type byLength []string
+
+func (s byLength) Len() int {
+	return len(s)
+}
+func (s byLength) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s byLength) Less(i, j int) bool {
+	return len(s[i]) < len(s[j])
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyz"
+
+func randStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
 
 type nothing struct{}
 
 func main() {
 	logger := &log.Std{Debug: true}
+	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+	if err != nil {
+		logger.Errorf("%v", err)
+	}
 
 	mt := mutating.MutatorFunc(func(_ context.Context, obj metav1.Object) (bool, error) {
 		ingress := obj.(*v1beta1.Ingress)
@@ -55,20 +86,21 @@ func main() {
 			}
 
 			if len(diff) > 0 {
+				// there is a 63 char limit in the CN of cert-manager/LE
+				// so we sort the slice of domain names so the shortest is first
+				// if it is over 63 characters, we'll need to synthesize a new one and make it first
+				sort.Sort(byLength(diff))
+				if len(diff[0]) > 63 {
+					prefix := reg.ReplaceAllString(diff[0][0:6], "")
+					randstr := randStringBytes(6)
+					dns1 := fmt.Sprintf("%s.%s.%s", prefix, randstr, defaultDomain)
+					diff = append([]string{dns1}, diff...)
+				}
 				// create the IngressTLS Object with our extra hosts and a custom secret
-				var sekret bytes.Buffer
-				tmpl, err := template.New("secret").Parse("auto-{{ .Name }}-tls-secret")
-				if err != nil {
-					panic(err)
-				}
-				err = tmpl.Execute(&sekret, ingress)
-				if err != nil {
-					panic(err)
-				}
-
+				sekret := fmt.Sprintf("auto-%s-tls", ingress.Name)
 				newtls := v1beta1.IngressTLS{
 					Hosts:      diff,
-					SecretName: sekret.String(),
+					SecretName: sekret,
 				}
 				spec.TLS = append(spec.TLS, newtls)
 				logger.Debugf("appending tls block: %v", newtls)
