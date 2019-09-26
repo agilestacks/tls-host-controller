@@ -2,7 +2,7 @@
 
 export COMPONENT_NAME ?= tls-host-controller
 export NAMESPACE      ?= $(error NAMESPACE must be set)
-DOMAIN_NAME           ?= $(error DOMAIN_NAME must be set)
+export DOMAIN_NAME    ?= $(error DOMAIN_NAME must be set)
 REGISTRY              ?= agilestacks
 IMAGE                 ?= $(REGISTRY)/$(COMPONENT_NAME)
 IMAGE_VERSION         ?= $(shell git rev-parse HEAD | colrm 7)

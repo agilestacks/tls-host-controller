@@ -5,6 +5,8 @@ function error_exit {
 	exit -1
 }
 
+export KUBECTL="kubectl --context=\"$(DOMAIN_NAME)\" --namespace=\"$(NAMESPACE)\""
+
 [ -z "$NAMESPACE" ] && error_exit "NAMESPACE env var must be set"
 
 # create the PK for our new CA
@@ -14,12 +16,12 @@ openssl ecparam -out ca.private.key -name prime256v1 -genkey -noout
 openssl req -x509 -new -nodes -key ca.private.key -subj "/CN=cluster.local" -days 3650 -reqexts v3_req -extensions v3_ca -out ca.crt
 
 # create the ca cert tls secret to be used by cert-manager
-kubectl create secret tls cm-util-ca \
+$KUBECTL create secret tls cm-util-ca \
 	--cert=ca.crt \
 	--key=ca.private.key \
 	--namespace=${NAMESPACE}
 
-cat <<EOF | kubectl apply -f -
+cat <<EOF | $KUBECTL apply -f -
 apiVersion: certmanager.k8s.io/v1alpha1
 kind: Issuer
 metadata:
@@ -30,7 +32,7 @@ spec:
     secretName: cm-util-ca
 EOF
 
-cat <<EOF | kubectl apply -f -
+cat <<EOF | $KUBECTL apply -f -
 apiVersion: certmanager.k8s.io/v1alpha1
 kind: Certificate
 metadata:
@@ -52,7 +54,7 @@ spec:
   - tls-host-controller
 EOF
 
-cat <<EOF | kubectl apply -f -
+cat <<EOF | $KUBECTL apply -f -
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingWebhookConfiguration
 metadata:
