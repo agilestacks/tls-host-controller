@@ -1,6 +1,8 @@
 .DEFAULT_GOAL := deploy
 
 export COMPONENT_NAME ?= tls-host-controller
+export NAMESPACE      ?= $(error NAMESPACE must be set)
+DOMAIN_NAME           ?= $(error DOMAIN_NAME must be set)
 REGISTRY              ?= agilestacks
 IMAGE                 ?= $(REGISTRY)/$(COMPONENT_NAME)
 IMAGE_VERSION         ?= $(shell git rev-parse HEAD | colrm 7)
@@ -13,8 +15,6 @@ deploy: purge create
 undeploy: purge
 
 create:
-	export NAMESPACE      ?= $(error NAMESPACE must be set)
-	DOMAIN_NAME           ?= $(error DOMAIN_NAME must be set)
 	deploy/create_cm_issuer_and_cert.sh
 	$(kubectl) apply -f deploy/manifests.yaml
 
