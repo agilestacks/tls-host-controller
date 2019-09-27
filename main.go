@@ -54,6 +54,19 @@ func main() {
 
 	mt := mutating.MutatorFunc(func(_ context.Context, obj metav1.Object) (bool, error) {
 		ingress := obj.(*v1beta1.Ingress)
+		var name string
+		if len(ingress.ObjectMeta.Name) == 0 && len(ingress.ObjectMeta.GenerateName) > 0 {
+			name = ingress.ObjectMeta.GenerateName
+		} else {
+			name = ingress.ObjectMeta.Name
+		}
+
+		// cert-manager installed ingress
+		logger.Debugf("checking ingress %s", name)
+		if strings.HasPrefix(name, "cm-acme-http-solver") {
+			logger.Debugf("skipping %s", name)
+			return false, nil
+		}
 
 		spec := &ingress.Spec
 		rulesHosts := make(map[string]nothing)
@@ -64,17 +77,8 @@ func main() {
 			spec.Rules = make([]v1beta1.IngressRule, 0)
 		}
 
-		cmFound := false
 		for _, r := range spec.Rules {
-			for _, path := range r.HTTP.Paths {
-				if strings.HasPrefix(path.Backend.ServiceName, "cm-acme-http-solver") {
-					cmFound = true
-					break
-				}
-			}
-			if !cmFound {
-				rulesHosts[r.Host] = nothing{}
-			}
+			rulesHosts[r.Host] = nothing{}
 		}
 
 		if len(rulesHosts) > 0 {
@@ -110,7 +114,7 @@ func main() {
 					diff = append([]string{dns1}, diff...)
 				}
 				// create the IngressTLS Object with our extra hosts and a custom secret
-				sekret := fmt.Sprintf("auto-%s-tls", ingress.Name)
+				sekret := fmt.Sprintf("auto-%s-tls", name)
 				newtls := v1beta1.IngressTLS{
 					Hosts:      diff,
 					SecretName: sekret,
