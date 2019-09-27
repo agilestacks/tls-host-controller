@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 const defaultDomain = "superhub.io"
@@ -63,8 +64,17 @@ func main() {
 			spec.Rules = make([]v1beta1.IngressRule, 0)
 		}
 
+		cmFound := false
 		for _, r := range spec.Rules {
-			rulesHosts[r.Host] = nothing{}
+			for _, path := range r.HTTP.Paths {
+				if strings.HasPrefix(path.Backend.ServiceName, "cm-acme-http-solver") {
+					cmFound = true
+					break
+				}
+			}
+			if !cmFound {
+				rulesHosts[r.Host] = nothing{}
+			}
 		}
 
 		if len(rulesHosts) > 0 {

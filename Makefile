@@ -1,8 +1,7 @@
 .DEFAULT_GOAL := deploy
 
 export COMPONENT_NAME ?= tls-host-controller
-export NAMESPACE      ?= $(error NAMESPACE must be set)
-export DOMAIN_NAME    ?= $(error DOMAIN_NAME must be set)
+export NAMESPACE      ?= kube-system
 REGISTRY              ?= agilestacks
 IMAGE                 ?= $(REGISTRY)/$(COMPONENT_NAME)
 IMAGE_VERSION         ?= $(shell git rev-parse HEAD | colrm 7)
@@ -13,6 +12,8 @@ kubectl      := kubectl --context="$(DOMAIN_NAME)" --namespace="$(NAMESPACE)"
 deploy: purge create
 
 undeploy: purge
+
+purge: export DOMAIN_NAME ?= $(error DOMAIN_NAME must be set)
 
 create:
 	deploy/create_cm_issuer_and_cert.sh
