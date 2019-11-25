@@ -22,7 +22,7 @@ $KUBECTL create secret tls cm-util-ca \
 	--namespace=${NAMESPACE}
 
 cat <<EOF | $KUBECTL apply -f -
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
   name: util-ca
@@ -33,7 +33,7 @@ spec:
 EOF
 
 cat <<EOF | $KUBECTL apply -f -
-apiVersion: certmanager.k8s.io/v1alpha1
+apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
   name: tls-host-controller
