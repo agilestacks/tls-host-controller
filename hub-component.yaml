@@ -5,11 +5,11 @@ meta:
   name: tls-host-controller
   brief: A MutatingWebhook style admission controller that synchronizes spec:tls:host with spec:rules:host
   source:
-      dir: .
+    dir: ../tls-host-controller
 
 requires:
-  - kubernetes
-  - cert-manager
+- kubernetes
+- cert-manager
 
 lifecycle:
   verbs:
@@ -31,4 +31,3 @@ templates:
   - kind: mustache
     files:
     - 'deploy/*.template'
-
