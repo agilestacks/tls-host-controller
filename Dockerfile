@@ -8,7 +8,7 @@ ENV GOOS linux
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
+COPY main.go cn.go ./
 
 # Build app
 RUN go build -a -installsuffix cgo -o tls-host-controller .
