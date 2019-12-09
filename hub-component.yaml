@@ -27,6 +27,8 @@ parameters:
       env: NAMESPACE
     - name: image
       value: agilestacks/tls-host-controller:stable
+    - name: defaultCN
+      value: ${component.ingress.fqdn},${component.ingress.ssoFqdn}
 
 templates:
   extra:

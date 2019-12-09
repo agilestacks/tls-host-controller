@@ -19,6 +19,8 @@ spec:
       - name: tls-host-controller
         image: {{component.tls-host-controller.image}}
         imagePullPolicy: Always
+        args:
+          - "-default-cn={{component.tls-host-controller.defaultCN}}"
         ports:
         - containerPort: 4443
         volumeMounts:

@@ -3,7 +3,13 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"flag"
 	"fmt"
+	"net/http"
+	"os"
+	"sort"
+	"strings"
+
 	"github.com/cloudflare/certinel"
 	"github.com/cloudflare/certinel/fswatcher"
 	whhttp "github.com/slok/kubewebhook/pkg/http"
@@ -11,14 +17,7 @@ import (
 	"github.com/slok/kubewebhook/pkg/webhook/mutating"
 	v1beta1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math/rand"
-	"net/http"
-	"regexp"
-	"sort"
-	"strings"
 )
-
-const defaultDomain = "superhub.io"
 
 // sorted string slice impl
 type byLength []string
@@ -33,23 +32,35 @@ func (s byLength) Less(i, j int) bool {
 	return len(s[i]) < len(s[j])
 }
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyz"
-
-func randStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
-}
-
 type nothing struct{}
+
+const cnLimit = 63
+
+// https://cert-manager.io/docs/usage/ingress/
+var certManagerAnnotations = []string{"kubernetes.io/tls-acme", "cert-manager.io/issuer", "cert-manager.io/cluster-issuer"}
 
 func main() {
 	logger := &log.Std{Debug: true}
-	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+
+	var defaultCN string
+	flag.StringVar(&defaultCN, "default-cn", "",
+		"A comma separated list of CNs that will be considered to create certificate CN shorter than 64 bytes")
+	flag.Usage = func() {
+		fmt.Fprint(os.Stderr,
+			`Usage:
+	tls-host-controller [-default-cn app.cluster.account.superhub.io]
+
+	If no -default-cn is set then the shortest host rule well be chomped in front to create CN < 64 bytes long
+
+Flags:
+`)
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	cns, err := parseCN(logger, defaultCN)
 	if err != nil {
-		logger.Errorf("%v", err)
+		panic(err)
 	}
 
 	mt := mutating.MutatorFunc(func(_ context.Context, obj metav1.Object) (bool, error) {
@@ -64,66 +75,70 @@ func main() {
 		// cert-manager installed ingress
 		logger.Debugf("checking ingress %s", name)
 		if strings.HasPrefix(name, "cm-acme-http-solver") {
-			logger.Debugf("skipping %s", name)
+			logger.Debugf("skipping cert-manager installed ingress %s", name)
 			return false, nil
 		}
 
 		spec := &ingress.Spec
-		rulesHosts := make(map[string]nothing)
-		tlsHosts := make(map[string]nothing)
 
-		// look before we leap again
-		if spec.Rules == nil {
-			spec.Rules = make([]v1beta1.IngressRule, 0)
+		// don't interfere with explicit TLS spec
+		if spec.TLS != nil {
+			logger.Debugf("skipping %s as it has TLS block configured", name)
+			return false, nil
 		}
 
+		rulesHosts := make(map[string]nothing)
 		for _, r := range spec.Rules {
-			rulesHosts[r.Host] = nothing{}
+			if len(r.Host) > 0 {
+				rulesHosts[r.Host] = nothing{}
+			}
 		}
 
 		if len(rulesHosts) > 0 {
-
-			// look before we leap again
-			if spec.TLS == nil {
-				spec.TLS = make([]v1beta1.IngressTLS, 0)
-			}
-			for i := range spec.TLS {
-				for _, h := range spec.TLS[i].Hosts {
-					tlsHosts[h] = nothing{}
-				}
+			hosts := make([]string, 0, len(rulesHosts))
+			for host := range rulesHosts {
+				hosts = append(hosts, host)
 			}
 
-			// get the diff of rules vs all IngressTLS objects
-			diff := make([]string, 0)
-			for k, _ := range rulesHosts {
-				if _, exists := tlsHosts[k]; !exists {
-					logger.Debugf("found unmatched host: %s", k)
-					diff = append(diff, k)
+			// there is a 63 char limit in the CN of cert-manager/LE
+			// so we sort the slice of domain names so the shortest is first
+			// if it is over 63 characters, we'll need to synthesize a new one and make it first
+			sort.Sort(byLength(hosts))
+			if len(hosts[0]) > cnLimit {
+				cn, err := makeCN(logger, hosts, cns)
+				if err != nil {
+					logger.Warningf("unable to append %s tls block: %v", name, err)
+					return false, nil
 				}
+				hosts = append([]string{cn}, hosts...)
 			}
 
-			if len(diff) > 0 {
-				// there is a 63 char limit in the CN of cert-manager/LE
-				// so we sort the slice of domain names so the shortest is first
-				// if it is over 63 characters, we'll need to synthesize a new one and make it first
-				sort.Sort(byLength(diff))
-				if len(diff[0]) > 63 {
-					prefix := reg.ReplaceAllString(diff[0][0:6], "")
-					randstr := randStringBytes(6)
-					dns1 := fmt.Sprintf("%s.%s.%s", prefix, randstr, defaultDomain)
-					diff = append([]string{dns1}, diff...)
-				}
-				// create the IngressTLS Object with our extra hosts and a custom secret
-				sekret := fmt.Sprintf("auto-%s-tls", name)
-				newtls := v1beta1.IngressTLS{
-					Hosts:      diff,
-					SecretName: sekret,
-				}
-				spec.TLS = append(spec.TLS, newtls)
-				logger.Debugf("appending tls block: %v", newtls)
-			} else {
-				logger.Debugf("no diffs found. No changes needed.")
+			// create the IngressTLS Object with our extra hosts and a custom secret
+			secret := fmt.Sprintf("auto-%s-tls", name)
+			newtls := v1beta1.IngressTLS{
+				Hosts:      hosts,
+				SecretName: secret,
+			}
+			spec.TLS = append(spec.TLS, newtls)
+			logger.Debugf("appending %s tls block: %+v", name, newtls)
 
+			// append Cert-manager annotation if not present already
+			annotations := ingress.ObjectMeta.Annotations
+			addAnnotation := true
+			if len(annotations) > 0 {
+				for _, annotationKey := range certManagerAnnotations {
+					if _, exist := annotations[annotationKey]; exist {
+						addAnnotation = false
+						break
+					}
+				}
+			}
+			if addAnnotation {
+				if ingress.ObjectMeta.Annotations == nil {
+					ingress.ObjectMeta.Annotations = make(map[string]string)
+				}
+				ingress.ObjectMeta.Annotations[certManagerAnnotations[0]] = "true"
+				logger.Debugf("appending %s annotation: %s: true", name, certManagerAnnotations[0])
 			}
 		}
 
@@ -148,10 +163,11 @@ func main() {
 
 	watcher, err := fswatcher.New("/data/tls.crt", "/data/tls.key")
 	if err != nil {
-		logger.Errorf("fatal: unable to read server certificate. err='%s'", err)
+		logger.Errorf("unable to read server certificate. err='%s'", err)
+		os.Exit(1)
 	}
 	sentinel := certinel.New(watcher, func(err error) {
-		logger.Infof("error: certinel was unable to reload the certificate. err='%s'", err)
+		logger.Warningf("certinel was unable to reload the certificate. err='%s'", err)
 	})
 
 	sentinel.Watch()

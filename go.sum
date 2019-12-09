@@ -135,6 +135,7 @@ k8s.io/api v0.0.0-20190923155552-eac758366a00/go.mod h1:blPYY5r6fKug8SVOnjDtFAlz
 k8s.io/apimachinery v0.0.0-20190221084156-01f179d85dbc/go.mod h1:ccL7Eh7zubPUSh9A3USN90/OzHNSVN6zxzde07TDCL0=
 k8s.io/apimachinery v0.0.0-20190923155427-ec87dd743e08 h1:pFx/eAF9SIDaRpM/i7b6FshYNCz4N3gYOXcWg+iGG5w=
 k8s.io/apimachinery v0.0.0-20190923155427-ec87dd743e08/go.mod h1:grJJH0hgilA2pYoUiJcPu2EDUal95NTq1vpxxvMLSu8=
+k8s.io/apimachinery v0.0.0-20191203211716-adc6f4cd9e7d h1:q+OZmYewHJeMCzwpHkXlNTtk5bvaUMPCikKvf77RBlo=
 k8s.io/gengo v0.0.0-20190128074634-0689ccc1d7d6/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/klog v0.0.0-20181102134211-b9b56d5dfc92/go.mod h1:Gq+BEi5rUBO/HRz0bTSXDUcqjScdoY3a9IHpCEIOOfk=
 k8s.io/klog v1.0.0 h1:Pt+yjF5aB1xDSVbau4VsWe+dQNzA0qv1LlXdC2dF6Q8=
