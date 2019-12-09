@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build app
-RUN go build -a -installsuffix cgo -o main .
+RUN go build -a -installsuffix cgo -o tls-host-controller .
 
 FROM alpine:latest
 
@@ -20,8 +20,8 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy the pre-built binary file from the previous stage
-COPY --from=builder /app/main .
+COPY --from=builder /app/tls-host-controller .
 
 EXPOSE 4443
 
-CMD [ "./main" ]
+CMD [ "./tls-host-controller" ]
