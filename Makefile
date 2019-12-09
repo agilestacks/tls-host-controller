@@ -11,7 +11,7 @@ REGISTRY_PASS         ?= ~/.docker/agilestacks.txt
 docker  := docker
 kubectl := kubectl --context="$(DOMAIN_NAME)" --namespace="$(NAMESPACE)"
 
-deploy: purge create
+deploy: purge create install
 
 undeploy: purge
 
@@ -19,6 +19,8 @@ purge: export DOMAIN_NAME ?= $(error DOMAIN_NAME must be set)
 
 create:
 	deploy/create_cm_issuer_and_cert.sh
+
+install:
 	$(kubectl) apply -f deploy/manifests.yaml
 
 purge:
