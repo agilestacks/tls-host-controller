@@ -24,4 +24,4 @@ COPY --from=builder /app/tls-host-controller .
 
 EXPOSE 4443
 
-CMD [ "./tls-host-controller" ]
+ENTRYPOINT [ "./tls-host-controller" ]
