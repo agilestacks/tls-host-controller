@@ -25,6 +25,8 @@ parameters:
     - name: namespace
       value: kube-system
       env: NAMESPACE
+    - name: image
+      value: agilestacks/tls-host-controller:stable
 
 templates:
   extra:

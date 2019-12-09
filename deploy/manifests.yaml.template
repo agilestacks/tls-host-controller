@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: tls-host-controller
-        image: agilestacks/tls-host-controller
+        image: {{component.tls-host-controller.image}}
         imagePullPolicy: Always
         ports:
         - containerPort: 4443

@@ -5,9 +5,11 @@ export NAMESPACE      ?= kube-system
 REGISTRY              ?= agilestacks
 IMAGE                 ?= $(REGISTRY)/$(COMPONENT_NAME)
 IMAGE_VERSION         ?= $(shell git rev-parse HEAD | colrm 7)
+IMAGE_TAG             ?= latest
+REGISTRY_PASS         ?= ~/.docker/agilestacks.txt
 
-docker       := docker
-kubectl      := kubectl --context="$(DOMAIN_NAME)" --namespace="$(NAMESPACE)"
+docker  := docker
+kubectl := kubectl --context="$(DOMAIN_NAME)" --namespace="$(NAMESPACE)"
 
 deploy: purge create
 
@@ -28,12 +30,39 @@ purge:
 	-$(kubectl) delete -f deploy/manifests.yaml
 
 build:
-	$(docker) build -f Dockerfile -t $(IMAGE):$(IMAGE_VERSION) .
-	$(docker) tag  $(IMAGE):$(IMAGE_VERSION) $(IMAGE):latest
+	$(docker) build -f Dockerfile -t $(IMAGE):$(IMAGE_VERSION) -t $(IMAGE):$(IMAGE_TAG) .
 .PHONY: build
 
-push:
-	$(docker) push $(IMAGE):$(IMAGE_VERSION)
-	$(docker) push $(IMAGE):latest
+push: login push-version push-tag
 .PHONY: push
 
+push-version:
+	$(docker) push $(IMAGE):$(IMAGE_VERSION)
+.PHONY: push-version
+
+push-tag:
+	$(docker) tag $(IMAGE):$(IMAGE_VERSION) $(IMAGE):$(IMAGE_TAG)
+	$(docker) push $(IMAGE):$(IMAGE_TAG)
+.PHONY: push-tag
+
+pull-latest:
+	docker pull $(IMAGE):latest
+.PHONY: pull-latest
+
+push-stable: pull-latest
+	$(MAKE) push-tag IMAGE_VERSION=latest IMAGE_TAG=stable
+.PHONY: push-stable
+
+push-stage: pull-latest
+	$(MAKE) push-tag IMAGE_VERSION=latest IMAGE_TAG=stage
+.PHONY: push-stage
+
+push-preview: pull-latest
+	$(MAKE) push-tag IMAGE_VERSION=latest IMAGE_TAG=preview
+.PHONY: push-preview
+
+login:
+	@ touch $(REGISTRY_PASS)
+	@ echo "Please put Docker Hub password into $(REGISTRY_PASS)"
+	cat $(REGISTRY_PASS) | docker login --username agilestacks --password-stdin
+.PHONY: login
