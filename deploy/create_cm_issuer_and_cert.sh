@@ -12,8 +12,14 @@ export KUBECTL="kubectl --context=${DOMAIN_NAME} --namespace=${NAMESPACE}"
 # create the PK for our new CA
 openssl ecparam -out ca.private.key -name prime256v1 -genkey -noout
 
+# homebrew openssl issue
+# https://github.com/jetstack/cert-manager/issues/279#issuecomment-434675059
+if [[ $(uname -s) == Darwin ]]; then
+  OSCONFIG="-config /usr/local/etc/openssl/openssl.cnf"
+fi
+
 #use the key to generate a ca cert to be used by cert-manager
-openssl req -x509 -new -nodes -key ca.private.key -subj "/CN=cluster.local" -days 3650 -reqexts v3_req -extensions v3_ca -out ca.crt
+openssl req -x509 -new -nodes -key ca.private.key -subj "/CN=cluster.local" -days 3650 -reqexts v3_req -extensions v3_ca -out ca.crt $OSCONFIG
 
 # create the ca cert tls secret to be used by cert-manager
 $KUBECTL create secret tls cm-util-ca \
