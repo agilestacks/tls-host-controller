@@ -16,7 +16,6 @@ lifecycle:
   verbs:
   - deploy
   - undeploy
-  - kubernetes
 
 parameters:
 - name: dns.domain
@@ -27,12 +26,12 @@ parameters:
     value: kube-system
     env: NAMESPACE
   - name: image
-    value: agilestacks/tls-host-controller:stable
+    value: agilestacks/tls-host-controller
+  - name: tag
+    value: stable
   - name: defaultCN
     value: ${component.ingress.fqdn},${component.ingress.ssoFqdn}
 
 templates:
-  extra:
-  - kind: mustache
-    files:
-    - 'deploy/*.template'
+  files:
+  - deploy/*.template

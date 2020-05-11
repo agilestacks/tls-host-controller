@@ -1,6 +1,6 @@
 module github.com/agilestacks/tls-host-controller
 
-go 1.12
+go 1.14
 
 require (
 	github.com/cloudflare/certinel v0.1.1

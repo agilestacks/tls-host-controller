@@ -5,7 +5,7 @@ function error_exit {
 	exit -1
 }
 
-export KUBECTL="kubectl --context=${DOMAIN_NAME} --namespace=${NAMESPACE}"
+KUBECTL="kubectl --context=${DOMAIN_NAME} --namespace=${NAMESPACE}"
 
 [ -z "$NAMESPACE" ] && error_exit "NAMESPACE env var must be set"
 

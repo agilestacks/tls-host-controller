@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tls-host-controller
-  namespace: {{component.tls-host-controller.namespace}}
+  namespace: ${component.tls-host-controller.namespace}
   labels:
     app: tls-host-controller
 spec:
@@ -17,10 +17,10 @@ spec:
     spec:
       containers:
       - name: tls-host-controller
-        image: {{component.tls-host-controller.image}}
+        image: ${component.tls-host-controller.image}:${component.tls-host-controller.tag}
         imagePullPolicy: Always
         args:
-          - "-default-cn={{component.tls-host-controller.defaultCN}}"
+          - "-default-cn=${component.tls-host-controller.defaultCN}"
         ports:
         - containerPort: 4443
         volumeMounts:
@@ -36,7 +36,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: tls-host-controller
-  namespace: {{component.tls-host-controller.namespace}}
+  namespace: ${component.tls-host-controller.namespace}
   labels:
     app: tls-host-controller
 spec:

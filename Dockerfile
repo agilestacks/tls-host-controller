@@ -1,27 +1,16 @@
-FROM golang:1.13-alpine as builder
-
-# Set Environment Variables
-ENV HOME /app
-ENV CGO_ENABLED 0
-ENV GOOS linux
+FROM golang:1.14-alpine as builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-COPY main.go cn.go ./
+COPY cmd ./cmd
+RUN go build github.com/agilestacks/tls-host-controller/cmd/tls-host-controller
 
-# Build app
-RUN go build -a -installsuffix cgo -o tls-host-controller .
 
-FROM alpine:latest
+FROM alpine:3.11
 
 RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-# Copy the pre-built binary file from the previous stage
+WORKDIR /app
 COPY --from=builder /app/tls-host-controller .
-
 EXPOSE 4443
-
 ENTRYPOINT [ "./tls-host-controller" ]
