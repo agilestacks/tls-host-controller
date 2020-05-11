@@ -3,6 +3,7 @@ version: 1
 kind: component
 meta:
   name: tls-host-controller
+  title: TLS Host Controller
   brief: A MutatingWebhook style admission controller that synchronizes spec:tls:host with spec:rules:host
   source:
     dir: ../tls-host-controller
