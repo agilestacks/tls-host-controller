@@ -20,7 +20,7 @@ spec:
         image: ${component.tls-host-controller.image}:${component.tls-host-controller.tag}
         imagePullPolicy: Always
         args:
-          - "-default-cn=${component.tls-host-controller.defaultCN}"
+        - "-default-cn=${component.tls-host-controller.defaultCN}"
         ports:
         - containerPort: 4443
         volumeMounts:

@@ -11,6 +11,6 @@ FROM alpine:3.11
 
 RUN apk --no-cache add ca-certificates
 WORKDIR /app
-COPY --from=builder /app/tls-host-controller .
+COPY --from=builder /app/tls-host-controller ./
 EXPOSE 4443
 ENTRYPOINT [ "./tls-host-controller" ]
