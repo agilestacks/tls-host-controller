@@ -23,7 +23,7 @@ Note that any existing `tls` blocks or `tls.host` entries will not be modified. 
 # Deploying
 
 This container is intended to be deployed into customer infrastructure (namely on-prem, but should work anywhere).
-Therefore, this container is hosted as a public resource in [https://hub.docker.com/r/agilestacks/tls-host-controller].
+Therefore, this container is hosted as a public resource on [Docker Hub](https://hub.docker.com/r/agilestacks/tls-host-controller/tags).
 
 # Building and Pushing
 
