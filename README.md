@@ -11,7 +11,7 @@ if spec.rules.hosts exists:
   collect every value in spec.rules[*].hosts into a list
   create a new `IngressTLS` struct
   add all of the hosts from the list to the TLS hosts
-  if lenght of hosts[0] > 63 (ACME/LE CN limit):
+  if length of hosts[0] > 63 (ACME/LE CN limit):
      synthesize new CN and put it in front of the list so that it became the CN of the cert
   if no any TLS annotation exists:
     append `kubernetes.io/tls-acme` annotation

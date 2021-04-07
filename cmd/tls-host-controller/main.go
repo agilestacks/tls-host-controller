@@ -12,9 +12,11 @@ import (
 
 	"github.com/cloudflare/certinel"
 	"github.com/cloudflare/certinel/fswatcher"
-	whhttp "github.com/slok/kubewebhook/pkg/http"
-	"github.com/slok/kubewebhook/pkg/log"
-	"github.com/slok/kubewebhook/pkg/webhook/mutating"
+	"github.com/sirupsen/logrus"
+	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
+	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
+	kwhmodel "github.com/slok/kubewebhook/v2/pkg/model"
+	"github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
 	v1beta1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -40,7 +42,9 @@ const cnLimit = 63
 var certManagerAnnotations = []string{"kubernetes.io/tls-acme", "cert-manager.io/issuer", "cert-manager.io/cluster-issuer"}
 
 func main() {
-	logger := &log.Std{Debug: true}
+	logrusLogEntry := logrus.NewEntry(logrus.New())
+	logrusLogEntry.Logger.SetLevel(logrus.DebugLevel)
+	logger := kwhlogrus.NewLogrus(logrusLogEntry)
 
 	var defaultCN string
 	flag.StringVar(&defaultCN, "default-cn", "",
@@ -63,7 +67,7 @@ Flags:
 		panic(err)
 	}
 
-	mt := mutating.MutatorFunc(func(_ context.Context, obj metav1.Object) (bool, error) {
+	mt := mutating.MutatorFunc(func(_ context.Context, _ *kwhmodel.AdmissionReview, obj metav1.Object) (*mutating.MutatorResult, error) {
 		ingress := obj.(*v1beta1.Ingress)
 		var name string
 		if len(ingress.ObjectMeta.Name) == 0 && len(ingress.ObjectMeta.GenerateName) > 0 {
@@ -76,7 +80,7 @@ Flags:
 		logger.Debugf("checking ingress %s", name)
 		if strings.HasPrefix(name, "cm-acme-http-solver") {
 			logger.Debugf("skipping cert-manager installed ingress %s", name)
-			return false, nil
+			return &mutating.MutatorResult{}, nil
 		}
 
 		spec := &ingress.Spec
@@ -84,7 +88,7 @@ Flags:
 		// don't interfere with explicit TLS spec
 		if spec.TLS != nil {
 			logger.Debugf("skipping %s as it has TLS block configured", name)
-			return false, nil
+			return &mutating.MutatorResult{}, nil
 		}
 
 		rulesHosts := make(map[string]nothing)
@@ -108,7 +112,7 @@ Flags:
 				cn, err := makeCN(logger, hosts, cns)
 				if err != nil {
 					logger.Warningf("unable to append %s tls block: %v", name, err)
-					return false, nil
+					return &mutating.MutatorResult{}, nil
 				}
 				hosts = append([]string{cn}, hosts...)
 			}
@@ -142,32 +146,34 @@ Flags:
 			}
 		}
 
-		return false, nil
+		return &mutating.MutatorResult{MutatedObject: ingress}, nil
 	})
 
 	cfg := mutating.WebhookConfig{
-		Name: "tls-host-controller",
-		Obj:  &v1beta1.Ingress{},
+		ID:      "tls-host-controller",
+		Obj:     &v1beta1.Ingress{},
+		Mutator: mt,
+		Logger:  logger,
 	}
 
-	wh, err := mutating.NewWebhook(cfg, mt, nil, nil, logger)
+	wh, err := mutating.NewWebhook(cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	// Get the handler for our webhook.
-	whHandler, err := whhttp.HandlerFor(wh)
+	// Get HTTP handler from webhook.
+	whHandler, err := kwhhttp.HandlerFor(kwhhttp.HandlerConfig{Webhook: wh, Logger: logger})
 	if err != nil {
 		panic(err)
 	}
 
 	watcher, err := fswatcher.New("/data/tls.crt", "/data/tls.key")
 	if err != nil {
-		logger.Errorf("unable to read server certificate. err='%s'", err)
+		logger.Errorf("unable to read server certificate: %v", err)
 		os.Exit(1)
 	}
 	sentinel := certinel.New(watcher, func(err error) {
-		logger.Warningf("certinel was unable to reload the certificate. err='%s'", err)
+		logger.Warningf("certinel was unable to reload the certificate: %v", err)
 	})
 
 	sentinel.Watch()

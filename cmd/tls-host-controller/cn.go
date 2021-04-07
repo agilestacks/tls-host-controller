@@ -4,10 +4,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/slok/kubewebhook/pkg/log"
+	kwhlog "github.com/slok/kubewebhook/v2/pkg/log"
 )
 
-func parseCN(logger log.Logger, cn string) ([]string, error) {
+func parseCN(logger kwhlog.Logger, cn string) ([]string, error) {
 	if len(cn) == 0 {
 		return nil, nil
 	}
@@ -23,7 +23,7 @@ func parseCN(logger log.Logger, cn string) ([]string, error) {
 	return cns2, nil
 }
 
-func makeCN(logger log.Logger, hosts, cns []string) (string, error) {
+func makeCN(logger kwhlog.Logger, hosts, cns []string) (string, error) {
 	for _, cn := range cns {
 		for _, host := range hosts {
 			if strings.HasSuffix(host, "."+cn) {
