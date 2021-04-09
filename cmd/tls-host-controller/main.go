@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -17,7 +18,9 @@ import (
 	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
 	kwhmodel "github.com/slok/kubewebhook/v2/pkg/model"
 	"github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
-	v1beta1 "k8s.io/api/networking/v1beta1"
+	extv1beta1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
+	netv1beta1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -68,12 +71,25 @@ Flags:
 	}
 
 	mt := mutating.MutatorFunc(func(_ context.Context, _ *kwhmodel.AdmissionReview, obj metav1.Object) (*mutating.MutatorResult, error) {
-		ingress := obj.(*v1beta1.Ingress)
-		var name string
-		if len(ingress.ObjectMeta.Name) == 0 && len(ingress.ObjectMeta.GenerateName) > 0 {
-			name = ingress.ObjectMeta.GenerateName
+		ingressv1, v1 := obj.(*netv1.Ingress)
+		ingressv1beta1, v1beta1 := obj.(*netv1beta1.Ingress)
+		ingressv1beta1ext, v1beta1ext := obj.(*extv1beta1.Ingress)
+		if !v1 && !v1beta1 && !v1beta1ext {
+			logger.Warningf("unsupported object kind %s: %+v", reflect.TypeOf(obj), obj)
+			return &mutating.MutatorResult{}, nil
+		}
+		logger.Debugf("object kind %s: %+v", reflect.TypeOf(obj), obj)
+		var meta *metav1.ObjectMeta
+		if v1 {
+			meta = &ingressv1.ObjectMeta
+		} else if v1beta1 {
+			meta = &ingressv1beta1.ObjectMeta
 		} else {
-			name = ingress.ObjectMeta.Name
+			meta = &ingressv1beta1ext.ObjectMeta
+		}
+		name := meta.Name
+		if len(name) == 0 && len(meta.GenerateName) > 0 {
+			name = meta.GenerateName
 		}
 
 		// cert-manager installed ingress
@@ -83,75 +99,125 @@ Flags:
 			return &mutating.MutatorResult{}, nil
 		}
 
-		spec := &ingress.Spec
+		var specv1 *netv1.IngressSpec
+		var specv1beta1 *netv1beta1.IngressSpec
+		var specv1beta1ext *extv1beta1.IngressSpec
+		if v1 {
+			specv1 = &ingressv1.Spec
+		} else if v1beta1 {
+			specv1beta1 = &ingressv1beta1.Spec
+		} else {
+			specv1beta1ext = &ingressv1beta1ext.Spec
+		}
 
 		// don't interfere with explicit TLS spec
-		if spec.TLS != nil {
-			logger.Debugf("skipping %s as it has TLS block configured", name)
+		if (v1 && specv1.TLS != nil) || (v1beta1 && specv1beta1.TLS != nil) || (v1beta1ext && specv1beta1ext.TLS != nil) {
+			logger.Debugf("skipping %s as it has TLS block configured already", name)
 			return &mutating.MutatorResult{}, nil
 		}
 
 		rulesHosts := make(map[string]nothing)
-		for _, r := range spec.Rules {
-			if len(r.Host) > 0 {
-				rulesHosts[r.Host] = nothing{}
+		if v1 {
+			for _, r := range specv1.Rules {
+				if len(r.Host) > 0 {
+					rulesHosts[r.Host] = nothing{}
+				}
+			}
+		} else if v1beta1 {
+			for _, r := range specv1beta1.Rules {
+				if len(r.Host) > 0 {
+					rulesHosts[r.Host] = nothing{}
+				}
+			}
+		} else {
+			for _, r := range specv1beta1ext.Rules {
+				if len(r.Host) > 0 {
+					rulesHosts[r.Host] = nothing{}
+				}
 			}
 		}
 
-		if len(rulesHosts) > 0 {
-			hosts := make([]string, 0, len(rulesHosts))
-			for host := range rulesHosts {
-				hosts = append(hosts, host)
-			}
+		if len(rulesHosts) == 0 {
+			logger.Debugf("skipping %s as it has no host rules configured", name)
+			return &mutating.MutatorResult{}, nil
+		}
 
-			// there is a 63 char limit in the CN of cert-manager/LE
-			// so we sort the slice of domain names so the shortest is first
-			// if it is over 63 characters, we'll need to synthesize a new one and make it first
-			sort.Sort(byLength(hosts))
-			if len(hosts[0]) > cnLimit {
-				cn, err := makeCN(logger, hosts, cns)
-				if err != nil {
-					logger.Warningf("unable to append %s tls block: %v", name, err)
-					return &mutating.MutatorResult{}, nil
-				}
-				hosts = append([]string{cn}, hosts...)
-			}
+		hosts := make([]string, 0, len(rulesHosts))
+		for host := range rulesHosts {
+			hosts = append(hosts, host)
+		}
 
-			// create the IngressTLS Object with our extra hosts and a custom secret
-			secret := fmt.Sprintf("auto-%s-tls", name)
-			newtls := v1beta1.IngressTLS{
+		// there is a 63 char limit in the CN of cert-manager/LE
+		// so we sort the slice of domain names so the shortest is first
+		// if it is over 63 characters, we'll need to synthesize a new one and make it first
+		sort.Sort(byLength(hosts))
+		if len(hosts[0]) > cnLimit {
+			cn, err := makeCN(logger, hosts, cns)
+			if err != nil {
+				logger.Warningf("unable to append %s tls block: %v", name, err)
+				return &mutating.MutatorResult{}, nil
+			}
+			hosts = append([]string{cn}, hosts...)
+		}
+
+		// create the IngressTLS Object with our extra hosts and a custom secret
+		secret := fmt.Sprintf("auto-%s-tls", name)
+		if v1 {
+			newtls := netv1.IngressTLS{
 				Hosts:      hosts,
 				SecretName: secret,
 			}
-			spec.TLS = append(spec.TLS, newtls)
+			specv1.TLS = append(specv1.TLS, newtls)
 			logger.Debugf("appending %s tls block: %+v", name, newtls)
-
-			// append Cert-manager annotation if not present already
-			annotations := ingress.ObjectMeta.Annotations
-			addAnnotation := true
-			if len(annotations) > 0 {
-				for _, annotationKey := range certManagerAnnotations {
-					if _, exist := annotations[annotationKey]; exist {
-						addAnnotation = false
-						break
-					}
-				}
+		} else if v1beta1 {
+			newtls := netv1beta1.IngressTLS{
+				Hosts:      hosts,
+				SecretName: secret,
 			}
-			if addAnnotation {
-				if ingress.ObjectMeta.Annotations == nil {
-					ingress.ObjectMeta.Annotations = make(map[string]string)
-				}
-				ingress.ObjectMeta.Annotations[certManagerAnnotations[0]] = "true"
-				logger.Debugf("appending %s annotation: %s: true", name, certManagerAnnotations[0])
+			specv1beta1.TLS = append(specv1beta1.TLS, newtls)
+			logger.Debugf("appending %s tls block: %+v", name, newtls)
+		} else {
+			newtls := extv1beta1.IngressTLS{
+				Hosts:      hosts,
+				SecretName: secret,
 			}
+			specv1beta1ext.TLS = append(specv1beta1ext.TLS, newtls)
+			logger.Debugf("appending %s tls block: %+v", name, newtls)
 		}
 
-		return &mutating.MutatorResult{MutatedObject: ingress}, nil
+		// append Cert-manager annotation if not present already
+		annotations := meta.Annotations
+		addAnnotation := true
+		if len(annotations) > 0 {
+			for _, annotationKey := range certManagerAnnotations {
+				if _, exist := annotations[annotationKey]; exist {
+					addAnnotation = false
+					break
+				}
+			}
+		}
+		if addAnnotation {
+			if meta.Annotations == nil {
+				meta.Annotations = make(map[string]string)
+			}
+			meta.Annotations[certManagerAnnotations[0]] = "true"
+			logger.Debugf("appending %s annotation: %s: true", name, certManagerAnnotations[0])
+		}
+
+		if v1 {
+			logger.Debugf("returning %s: %+v", reflect.TypeOf(ingressv1), ingressv1)
+			return &mutating.MutatorResult{MutatedObject: ingressv1}, nil
+		}
+		if v1beta1 {
+			logger.Debugf("returning %s: %+v", reflect.TypeOf(ingressv1beta1), ingressv1beta1)
+			return &mutating.MutatorResult{MutatedObject: ingressv1beta1}, nil
+		}
+		logger.Debugf("returning %s: %+v", reflect.TypeOf(ingressv1beta1ext), ingressv1beta1ext)
+		return &mutating.MutatorResult{MutatedObject: ingressv1beta1ext}, nil
 	})
 
 	cfg := mutating.WebhookConfig{
 		ID:      "tls-host-controller",
-		Obj:     &v1beta1.Ingress{},
 		Mutator: mt,
 		Logger:  logger,
 	}

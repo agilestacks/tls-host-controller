@@ -22,7 +22,7 @@ $KUBECTL create secret tls cm-util-ca \
 	--namespace=${NAMESPACE}
 
 cat <<EOF | $KUBECTL apply -f -
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: util-ca
@@ -33,7 +33,7 @@ spec:
 EOF
 
 cat <<EOF | $KUBECTL apply -f -
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: tls-host-controller
@@ -44,8 +44,6 @@ spec:
     name: util-ca
     kind: Issuer
   commonName: tls-host-controller.kube-system.svc.cluster.local
-  organization:
-  - AgileStacks
   dnsNames:
   - tls-host-controller.kube-system.svc.cluster.local
   - tls-host-controller.kube-system.svc.cluster
@@ -55,7 +53,7 @@ spec:
 EOF
 
 cat <<EOF | $KUBECTL apply -f -
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: tls-host-controller
@@ -63,6 +61,10 @@ metadata:
     app: tls-host-controller
 webhooks:
 - name: tls-host-controller.${NAMESPACE}.svc.cluster.local
+  matchPolicy: Exact
+  sideEffects: None
+  failurePolicy: Ignore
+  admissionReviewVersions: ["v1", "v1beta1"]
   clientConfig:
     service:
       name: tls-host-controller
@@ -70,8 +72,12 @@ webhooks:
       path: "/mutate"
     caBundle: $(cat ca.crt | base64 | tr -d '\n')
   rules:
-  - operations: [ "CREATE", "UPDATE" ]
-    apiGroups: ["networking.k8s.io", "extensions"]
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["networking.k8s.io"]
+    apiVersions: ["v1", "v1beta1"]
+    resources: ["ingresses"]
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["extensions"]
     apiVersions: ["v1beta1"]
     resources: ["ingresses"]
 EOF
